@@ -1,5 +1,8 @@
 # webui-nova
 
+<img width="1052" height="695" alt="image" src="https://github.com/user-attachments/assets/7380ac69-2559-4ab3-8d52-aad0d3c649f7" />
+
+
 A tiny, localhost-only web UI for chatting with **OpenClaw** ("Nova") from your browser.
 
 It’s meant to be:
