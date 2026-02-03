@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Nova — Web UI (Gateway Sessions)</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Nova (web)</h1>
+      <div class="small">
+        This UI connects directly to the <b>OpenClaw Gateway WebSocket</b> and can attach to the <b>same sessions</b>
+        you see in the Dashboard (cron jobs, context, etc.).
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="row" style="justify-content: space-between;">
+        <span id="status" class="badge">disconnected</span>
+        <button id="reconnect">Reconnect</button>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="row">
+        <label class="small" for="sessionSelect" style="min-width:70px;">Session</label>
+        <select id="sessionSelect"></select>
+      </div>
+
+      <div class="small" style="margin-top:8px;">
+        Selected: <span id="sessionKey" class="badge">(none)</span>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div class="avatarBox card" style="padding:10px;">
+        <svg id="avatar" viewBox="0 0 220 220" aria-label="Nova avatar">
+          <defs>
+            <radialGradient id="glow" cx="35%" cy="30%" r="70%">
+              <stop offset="0%" stop-color="#7aa2ff" stop-opacity="0.45" />
+              <stop offset="60%" stop-color="#7aa2ff" stop-opacity="0.08" />
+              <stop offset="100%" stop-color="#7aa2ff" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <circle cx="110" cy="110" r="98" fill="url(#glow)" />
+          <circle id="head" cx="110" cy="112" r="78" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.14)" stroke-width="2" />
+
+          <g id="face" transform="translate(0,0)">
+            <g id="eyes">
+              <ellipse id="eyeL" cx="82" cy="98" rx="16" ry="10" fill="rgba(255,255,255,0.09)" stroke="rgba(255,255,255,0.18)" />
+              <ellipse id="eyeR" cx="138" cy="98" rx="16" ry="10" fill="rgba(255,255,255,0.09)" stroke="rgba(255,255,255,0.18)" />
+              <circle id="pupilL" cx="82" cy="98" r="4" fill="#dbe7ff" />
+              <circle id="pupilR" cx="138" cy="98" r="4" fill="#dbe7ff" />
+            </g>
+
+            <g id="brows" opacity="0.75">
+              <path id="browL" d="M66 82 Q82 74 98 82" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+              <path id="browR" d="M122 82 Q138 74 154 82" stroke="rgba(255,255,255,0.35)" stroke-width="3" fill="none" stroke-linecap="round" />
+            </g>
+
+            <path id="mouth" d="M86 140 Q110 155 134 140" stroke="rgba(255,255,255,0.55)" stroke-width="4" fill="none" stroke-linecap="round" />
+          </g>
+        </svg>
+      </div>
+
+      <div style="height:10px"></div>
+      <div class="small">
+        Mood: <span id="mood" class="badge">neutral</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div class="badge">Chat</div>
+          <div class="small">Messages sent here stay in the selected session (not forwarded to Telegram).</div>
+        </div>
+        <button id="clear">Clear</button>
+      </div>
+
+      <div style="height:10px"></div>
+      <div id="chat" class="chat"></div>
+
+      <div class="footer">
+        <textarea id="input" placeholder="Type… (Shift+Enter for newline)"></textarea>
+        <button id="send">Send</button>
+      </div>
+      <div class="small" style="margin-top:8px;">Avatar animates while I’m replying.</div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
