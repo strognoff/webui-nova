@@ -144,6 +144,16 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/') {
       return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'index.html'), 'text/html; charset=utf-8');
     }
+    if (req.method === 'GET' && url.pathname.startsWith('/assets/')) {
+      const assetPath = path.join(baseDir, '..', 'nova-ui-react', 'dist', url.pathname.substring(1));
+      const ext = path.extname(assetPath);
+      const type = ext === '.js'
+        ? 'text/javascript; charset=utf-8'
+        : ext === '.css'
+          ? 'text/css; charset=utf-8'
+          : 'application/octet-stream';
+      return serveFile(res, assetPath, type);
+    }
     if (req.method === 'GET' && url.pathname === '/app.js') {
       return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'assets', 'index-TW31Yimb.js'), 'text/javascript; charset=utf-8');
     }
