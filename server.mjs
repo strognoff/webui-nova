@@ -73,6 +73,69 @@ const baseDir = path.dirname(new URL(import.meta.url).pathname);
 const DEFAULT_EXIT_TARGET = 74500;
 const TRAILING_START = 74000;
 const EXIT_NOTE = 'Raise the stop once BTC clears 74,000 so that 74,500 is the full-profit target.';
+const TOKEN_HISTORY_PATH = path.join(HOME_DIR, '.openclaw', 'workspace', 'data', 'token_usage.json');
+
+function londonDateString() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+}
+
+function loadTokenHistory() {
+  try {
+    const raw = fs.readFileSync(TOKEN_HISTORY_PATH, 'utf8');
+    const parsed = JSON.parse(raw);
+    return {
+      lastTotalTokens: Number.isFinite(Number(parsed?.lastTotalTokens)) ? Number(parsed.lastTotalTokens) : 0,
+      history: parsed?.history || {}
+    };
+  } catch (error) {
+    return { lastTotalTokens: 0, history: {} };
+  }
+}
+
+function saveTokenHistory(data) {
+  try {
+    fs.mkdirSync(path.dirname(TOKEN_HISTORY_PATH), { recursive: true });
+    fs.writeFileSync(TOKEN_HISTORY_PATH, JSON.stringify(data, null, 2), 'utf8');
+  } catch (error) {
+    console.error('failed to persist token history', error?.message || error);
+  }
+}
+
+function normalizeHistoryEntries(history) {
+  const entries = Object.entries(history || {}).map(([date, tokens]) => ({
+    date,
+    tokens: Number.isFinite(Number(tokens)) ? Number(tokens) : 0
+  }));
+  entries.sort((a, b) => a.date.localeCompare(b.date));
+  return entries.slice(-14);
+}
+
+function updateTokenHistory(currentTotal, today) {
+  const data = loadTokenHistory();
+  const prevTotal = Number.isFinite(Number(data.lastTotalTokens)) ? Number(data.lastTotalTokens) : 0;
+  const delta = Math.max(0, Number(currentTotal) - prevTotal);
+  const history = { ...data.history };
+  if (!history[today]) history[today] = 0;
+  history[today] += delta;
+  const pruned = normalizeHistoryEntries(history).reduce((acc, entry) => {
+    acc[entry.date] = entry.tokens;
+    return acc;
+  }, {});
+  const result = {
+    lastTotalTokens: Number(currentTotal) || prevTotal,
+    history: pruned
+  };
+  saveTokenHistory(result);
+  return result;
+}
+
+function loadOrUpdateTokenHistory(currentTotal) {
+  const today = londonDateString();
+  if (Number.isFinite(Number(currentTotal))) {
+    return updateTokenHistory(currentTotal, today);
+  }
+  return loadTokenHistory();
+}
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -218,12 +281,16 @@ const server = http.createServer(async (req, res) => {
         console.error('failed to read session tokens', err?.message || err);
       }
 
+      const tokenHistoryData = loadOrUpdateTokenHistory(tokens?.totalTokens);
+      const tokenHistoryArray = normalizeHistoryEntries(tokenHistoryData.history);
+
       return safeJson(res, 200, {
         ok: true,
         jobs: jobInsights,
         profitLoss,
         latestTrade,
         tokens,
+        tokenHistory: tokenHistoryArray,
         nextExit: {
           target: DEFAULT_EXIT_TARGET,
           trailingStart: TRAILING_START,

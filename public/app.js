@@ -13,6 +13,8 @@ const tokenUsageEl = document.getElementById('tokenUsage');
 const latestTradeEl = document.getElementById('latestTrade');
 const nextExitEl = document.getElementById('nextExit');
 const nextExitNoteEl = document.getElementById('nextExitNote');
+const tokenGraphEl = document.getElementById('tokenGraph');
+const tokenGraphLabel = document.getElementById('tokenGraphLabel');
 const refreshInsightsBtn = document.getElementById('refreshInsights');
 
 const mouth = document.getElementById('mouth');
@@ -457,6 +459,36 @@ function renderTokens(tokens) {
   }
 }
 
+function renderTokenHistoryGraph(history) {
+  if (!tokenGraphEl) return;
+  tokenGraphEl.innerHTML = '';
+  if (!Array.isArray(history) || !history.length) {
+    tokenGraphEl.textContent = 'No history yet.';
+    if (tokenGraphLabel) tokenGraphLabel.textContent = 'Updated when the UI refreshes (every minute).';
+    return;
+  }
+  const maxTokens = Math.max(...history.map(entry => entry.tokens));
+  history.forEach(entry => {
+    const column = document.createElement('div');
+    column.className = 'token-graph-column';
+    const fill = document.createElement('div');
+    fill.className = 'token-graph-fill';
+    const height = maxTokens > 0 ? Math.max((entry.tokens / maxTokens) * 100, 8) : 8;
+    fill.style.setProperty('--fill-height', `${height}%`);
+    const value = document.createElement('div');
+    value.className = 'token-graph-column-value';
+    value.textContent = formatTokens(entry.tokens);
+    const label = document.createElement('div');
+    label.className = 'token-graph-column-label';
+    label.textContent = entry.date.slice(5);
+    column.appendChild(fill);
+    column.appendChild(value);
+    column.appendChild(label);
+    tokenGraphEl.appendChild(column);
+  });
+  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (London date).';
+}
+
 function renderNextExit(exit) {
   if (!nextExitEl) return;
   if (exit && typeof exit.target === 'number') {
@@ -483,6 +515,7 @@ async function refreshInsights() {
     renderJobs(data.jobs || []);
     renderProfitLoss(data.profitLoss);
     renderTokens(data.tokens);
+    renderTokenHistoryGraph(data.tokenHistory);
     renderLatestTrade(data.latestTrade);
     renderNextExit(data.nextExit);
   } catch (err) {
