@@ -1,10 +1,17 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
+const SQLITE_MAX_BUFFER = 8 * 1024 * 1024;
+const execFileAsync = promisify(execFile);
+const HOME_DIR = process.env.HOME || os.homedir();
 
 const WEB_PORT = process.env.NOVA_WEBUI_PORT ? Number(process.env.NOVA_WEBUI_PORT) : 18881;
 const GATEWAY_HOST = '127.0.0.1';
-const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || path.join(process.env.HOME, '.openclaw', 'openclaw.json');
+const CONFIG_PATH = process.env.OPENCLAW_CONFIG_PATH || path.join(HOME_DIR, '.openclaw', 'openclaw.json');
 
 function readConfig() {
   const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
@@ -42,6 +49,24 @@ function collectBody(req) {
     req.on('end', () => resolve(data));
     req.on('error', reject);
   });
+}
+
+function normalizeTimestamp(value) {
+  if (typeof value === 'number') return value;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+async function runSqliteJson(dbPath, query) {
+  const result = [];
+  try {
+    const { stdout } = await execFileAsync('sqlite3', ['-json', dbPath, query], { maxBuffer: SQLITE_MAX_BUFFER });
+    if (!stdout) return result;
+    result.push(...JSON.parse(stdout));
+  } catch (err) {
+    console.error('sqlite3 error', err?.message || err);
+  }
+  return result;
 }
 
 const baseDir = path.dirname(new URL(import.meta.url).pathname);
@@ -87,6 +112,115 @@ const server = http.createServer(async (req, res) => {
         ok: true,
         wsUrl: `ws://${GATEWAY_HOST}:${gatewayPort}`,
         token: token || null
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/insights') {
+      const jobsPath = path.join(HOME_DIR, '.openclaw', 'cron', 'jobs.json');
+      let jobInsights = [];
+      try {
+        const raw = fs.readFileSync(jobsPath, 'utf8');
+        const parsed = JSON.parse(raw);
+        const jobs = Array.isArray(parsed?.jobs) ? parsed.jobs : [];
+        jobInsights = jobs.map(job => {
+          const schedule = job.schedule || {};
+          const state = job.state || {};
+          return {
+            id: job.id,
+            name: job.name,
+            enabled: Boolean(job.enabled),
+            scheduleKind: schedule.kind,
+            scheduleExpr: schedule.expr,
+            scheduleTz: schedule.tz,
+            nextRunAtMs: normalizeTimestamp(state.nextRunAtMs),
+            lastRunAtMs: normalizeTimestamp(state.lastRunAtMs),
+            lastStatus: state.lastStatus || 'idle',
+            lastError: state.lastError || null
+          };
+        });
+      } catch (err) {
+        console.error('failed to read cron jobs', err?.message || err);
+      }
+
+      const dbPath = path.join(HOME_DIR, '.openclaw', 'workspace', 'repos', 'coinbase-trading-support', 'data', 'trades.db');
+      const statsQuery = `SELECT
+        COUNT(*) AS trades,
+        IFNULL(SUM(realized_pnl), 0) AS total_pnl,
+        IFNULL(AVG(realized_pnl), 0) AS average_pnl,
+        SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN realized_pnl < 0 THEN 1 ELSE 0 END) AS losses,
+        SUM(CASE WHEN realized_pnl > 0 THEN realized_pnl ELSE 0 END) AS win_amount,
+        SUM(CASE WHEN realized_pnl < 0 THEN realized_pnl ELSE 0 END) AS loss_amount
+      FROM trades
+      WHERE realized_pnl IS NOT NULL;`;
+
+      let profitLoss = null;
+      try {
+        const statsRows = await runSqliteJson(dbPath, statsQuery);
+        const row = statsRows[0] || {};
+        const trades = Number.isFinite(Number(row.trades)) ? Number(row.trades) : 0;
+        const wins = Number.isFinite(Number(row.wins)) ? Number(row.wins) : 0;
+        const losses = Number.isFinite(Number(row.losses)) ? Number(row.losses) : 0;
+        const totalPnl = Number.isFinite(Number(row.total_pnl)) ? Number(row.total_pnl) : 0;
+        const averagePnl = Number.isFinite(Number(row.average_pnl)) ? Number(row.average_pnl) : 0;
+        const winAmount = Number.isFinite(Number(row.win_amount)) ? Number(row.win_amount) : 0;
+        const lossAmount = Number.isFinite(Number(row.loss_amount)) ? Number(row.loss_amount) : 0;
+        const winRate = trades ? (wins / trades) * 100 : 0;
+        profitLoss = {
+          trades,
+          totalPnl,
+          averagePnl,
+          wins,
+          losses,
+          winRate,
+          winAmount,
+          lossAmount
+        };
+      } catch (err) {
+        console.error('failed to read ledger stats', err?.message || err);
+      }
+
+      let latestTrade = null;
+      try {
+        const latestRows = await runSqliteJson(dbPath, `SELECT id, status, asset, timestamp, entry_price, exit_price, realized_pnl FROM trades ORDER BY timestamp DESC LIMIT 1;`);
+        if (latestRows[0]) {
+          const row = latestRows[0];
+          latestTrade = {
+            id: row.id,
+            status: row.status,
+            asset: row.asset,
+            timestamp: row.timestamp,
+            entryPrice: Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null,
+            exitPrice: Number.isFinite(Number(row.exit_price)) ? Number(row.exit_price) : null,
+            realizedPnl: Number.isFinite(Number(row.realized_pnl)) ? Number(row.realized_pnl) : null
+          };
+        }
+      } catch (err) {
+        console.error('failed to read latest trade', err?.message || err);
+      }
+
+      let tokens = null;
+      try {
+        const sessionsPath = path.join(HOME_DIR, '.openclaw', 'agents', 'main', 'sessions', 'sessions.json');
+        const rawSessions = fs.readFileSync(sessionsPath, 'utf8');
+        const sessions = JSON.parse(rawSessions);
+        const mainSess = sessions['agent:main:main'];
+        if (mainSess) {
+          const inputTokens = Number.isFinite(Number(mainSess.inputTokens)) ? Number(mainSess.inputTokens) : 0;
+          const outputTokens = Number.isFinite(Number(mainSess.outputTokens)) ? Number(mainSess.outputTokens) : 0;
+          const totalTokens = Number.isFinite(Number(mainSess.totalTokens)) ? Number(mainSess.totalTokens) : 0;
+          tokens = { inputTokens, outputTokens, totalTokens };
+        }
+      } catch (err) {
+        console.error('failed to read session tokens', err?.message || err);
+      }
+
+      return safeJson(res, 200, {
+        ok: true,
+        jobs: jobInsights,
+        profitLoss,
+        latestTrade,
+        tokens
       });
     }
 

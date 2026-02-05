@@ -7,6 +7,11 @@ const reconnectBtn = document.getElementById('reconnect');
 const moodEl = document.getElementById('mood');
 const sessionSelect = document.getElementById('sessionSelect');
 const sessionKeyBadge = document.getElementById('sessionKey');
+const insightsJobsEl = document.getElementById('insightsStatus');
+const profitLossEl = document.getElementById('profitLoss');
+const tokenUsageEl = document.getElementById('tokenUsage');
+const latestTradeEl = document.getElementById('latestTrade');
+const refreshInsightsBtn = document.getElementById('refreshInsights');
 
 const mouth = document.getElementById('mouth');
 const pupilL = document.getElementById('pupilL');
@@ -363,6 +368,115 @@ async function send() {
   }
 }
 
+function formatDate(ms) {
+  const num = Number(ms);
+  if (!Number.isFinite(num)) return 'n/a';
+  return new Date(num).toLocaleString();
+}
+
+const currencyFormatter = new Intl.NumberFormat('en-GB', {
+  style: 'currency',
+  currency: 'USD',
+  maximumFractionDigits: 2
+});
+
+function formatTokens(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '0';
+  if (Math.abs(num) >= 1000) return `${(num / 1000).toFixed(1)}k`;
+  return num.toString();
+}
+
+function formatJobStatus(job) {
+  const parts = [];
+  const status = job.lastStatus || 'idle';
+  parts.push(status);
+  if (job.scheduleExpr) parts.push(job.scheduleExpr);
+  else if (job.scheduleKind) parts.push(job.scheduleKind);
+  if (job.lastRunAtMs) parts.push(`last run: ${formatDate(job.lastRunAtMs)}`);
+  if (job.nextRunAtMs) parts.push(`next: ${formatDate(job.nextRunAtMs)}`);
+  if (job.lastError) parts.push(`error: ${job.lastError}`);
+  return parts.join(' · ');
+}
+
+function renderJobs(jobs = []) {
+  if (!insightsJobsEl) return;
+  insightsJobsEl.innerHTML = '';
+  if (!jobs.length) {
+    insightsJobsEl.textContent = 'No cron jobs found.';
+    return;
+  }
+  for (const job of jobs) {
+    const item = document.createElement('div');
+    item.className = 'insight-item';
+    const indicator = job.lastStatus === 'error' ? '⚠️' : job.enabled ? '●' : '○';
+    item.innerHTML = `
+      <div class="insight-item-header">
+        <strong>${job.name}</strong>
+        <span>${indicator} ${job.enabled ? 'Enabled' : 'Disabled'}</span>
+      </div>
+      <div class="insight-item-status">${formatJobStatus(job)}</div>
+    `;
+    insightsJobsEl.appendChild(item);
+  }
+}
+
+function renderProfitLoss(profitLoss) {
+  if (!profitLossEl) return;
+  if (profitLoss && typeof profitLoss.totalPnl === 'number') {
+    profitLossEl.innerHTML = `
+      <strong>${currencyFormatter.format(profitLoss.totalPnl)}</strong>
+      <div class="small">
+        ${profitLoss.trades} trade(s) • ${profitLoss.wins} wins • ${profitLoss.losses} losses • win rate ${profitLoss.winRate.toFixed(1)}%
+      </div>
+    `;
+  } else {
+    profitLossEl.textContent = 'No closed trades captured yet.';
+  }
+}
+
+function renderLatestTrade(trade) {
+  if (!latestTradeEl) return;
+  if (trade?.id) {
+    const pnlText = typeof trade.realizedPnl === 'number' ? currencyFormatter.format(trade.realizedPnl) : '—';
+    const when = trade.timestamp ? formatDate(trade.timestamp) : 'unknown time';
+    latestTradeEl.textContent = `Last trade ${trade.id} (${trade.status || 'unknown'}) — ${pnlText} ${trade.asset || ''} at ${when}`;
+  } else {
+    latestTradeEl.textContent = 'No trade history yet.';
+  }
+}
+
+function renderTokens(tokens) {
+  if (!tokenUsageEl) return;
+  if (tokens && typeof tokens.totalTokens === 'number') {
+    tokenUsageEl.textContent = `In ${formatTokens(tokens.inputTokens)} · Out ${formatTokens(tokens.outputTokens)} · Total ${formatTokens(tokens.totalTokens)}`;
+  } else {
+    tokenUsageEl.textContent = 'Token usage data not available.';
+  }
+}
+
+async function refreshInsights() {
+  if (!insightsJobsEl) return;
+  insightsJobsEl.textContent = 'Loading…';
+  if (profitLossEl) profitLossEl.textContent = 'Loading…';
+  if (tokenUsageEl) tokenUsageEl.textContent = 'Loading…';
+  if (latestTradeEl) latestTradeEl.textContent = '';
+  try {
+    const resp = await fetch('/api/insights');
+    const data = await resp.json();
+    if (!data?.ok) throw new Error(data?.error || 'failed to load insights');
+    renderJobs(data.jobs || []);
+    renderProfitLoss(data.profitLoss);
+    renderTokens(data.tokens);
+    renderLatestTrade(data.latestTrade);
+  } catch (err) {
+    insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;
+    if (profitLossEl) profitLossEl.textContent = 'Unable to load profit/loss.';
+    if (tokenUsageEl) tokenUsageEl.textContent = 'Unable to load token usage.';
+    if (latestTradeEl) latestTradeEl.textContent = '';
+  }
+}
+
 // Idle animation
 let t0 = performance.now();
 let blinkAt = performance.now() + 1200 + Math.random() * 1800;
@@ -421,6 +535,13 @@ sessionSelect.addEventListener('change', async () => {
   await selectSession(sessionSelect.value);
 });
 
+refreshInsightsBtn?.addEventListener('click', (e) => {
+  e.preventDefault();
+  refreshInsights();
+});
+
 setMood('neutral');
 connect();
 requestAnimationFrame(tick);
+refreshInsights();
+setInterval(() => refreshInsights(), 60_000);

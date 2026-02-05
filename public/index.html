@@ -89,6 +89,29 @@
       </div>
       <div class="small" style="margin-top:8px;">Avatar animates while I’m replying.</div>
     </div>
+
+    <div class="card insights-card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h2>Insights</h2>
+          <div class="small">Running cron health, ledger stats, and cumulative token usage all in one place.</div>
+        </div>
+        <button id="refreshInsights">Refresh</button>
+      </div>
+      <div class="insight-block">
+        <h3>Running status</h3>
+        <div id="insightsStatus" class="insight-list">Loading…</div>
+      </div>
+      <div class="insight-block">
+        <h3>Total profit / loss</h3>
+        <div id="profitLoss" class="insight-metric">Loading…</div>
+        <div id="latestTrade" class="insight-note"></div>
+      </div>
+      <div class="insight-block">
+        <h3>Token usage</h3>
+        <div id="tokenUsage" class="insight-metric">Loading…</div>
+      </div>
+    </div>
   </div>
 
   <script src="/app.js"></script>
