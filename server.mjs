@@ -142,13 +142,13 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://localhost:${WEB_PORT}`);
 
     if (req.method === 'GET' && url.pathname === '/') {
-      return serveFile(res, path.join(baseDir, 'public', 'index.html'), 'text/html; charset=utf-8');
+      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'index.html'), 'text/html; charset=utf-8');
     }
     if (req.method === 'GET' && url.pathname === '/app.js') {
-      return serveFile(res, path.join(baseDir, 'public', 'app.js'), 'text/javascript; charset=utf-8');
+      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'assets', 'index-TW31Yimb.js'), 'text/javascript; charset=utf-8');
     }
     if (req.method === 'GET' && url.pathname === '/styles.css') {
-      return serveFile(res, path.join(baseDir, 'public', 'styles.css'), 'text/css; charset=utf-8');
+      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'assets', 'index-Bq6AvQf8.css'), 'text/css; charset=utf-8');
     }
 
     if (req.method === 'GET' && url.pathname === '/api/status') {
