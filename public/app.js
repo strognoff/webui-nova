@@ -15,6 +15,7 @@ const nextExitEl = document.getElementById('nextExit');
 const nextExitNoteEl = document.getElementById('nextExitNote');
 const tokenGraphEl = document.getElementById('tokenGraph');
 const tokenGraphLabel = document.getElementById('tokenGraphLabel');
+const tokenChangePercentEl = document.getElementById('tokenChangePercent');
 const refreshInsightsBtn = document.getElementById('refreshInsights');
 
 const mouth = document.getElementById('mouth');
@@ -486,7 +487,19 @@ function renderTokenHistoryGraph(history) {
     column.appendChild(label);
     tokenGraphEl.appendChild(column);
   });
-  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (London date).';
+  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 London dates).';
+}
+
+function renderTokenChange(percent) {
+  if (!tokenChangePercentEl) return;
+  if (percent === null || percent === undefined || Number.isNaN(percent)) {
+    tokenChangePercentEl.textContent = '—';
+    tokenChangePercentEl.className = 'token-change';
+    return;
+  }
+  const formatted = `${percent >= 0 ? '+' : ''}${percent.toFixed(1)}% vs yesterday`; 
+  tokenChangePercentEl.textContent = formatted;
+  tokenChangePercentEl.className = `token-change ${percent >= 0 ? 'positive' : 'negative'}`;
 }
 
 function renderNextExit(exit) {
@@ -516,6 +529,7 @@ async function refreshInsights() {
     renderProfitLoss(data.profitLoss);
     renderTokens(data.tokens);
     renderTokenHistoryGraph(data.tokenHistory);
+    renderTokenChange(data.tokenChangePercent);
     renderLatestTrade(data.latestTrade);
     renderNextExit(data.nextExit);
   } catch (err) {

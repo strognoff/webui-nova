@@ -101,13 +101,13 @@ function saveTokenHistory(data) {
   }
 }
 
-function normalizeHistoryEntries(history) {
+function normalizeHistoryEntries(history, limit = 14) {
   const entries = Object.entries(history || {}).map(([date, tokens]) => ({
     date,
     tokens: Number.isFinite(Number(tokens)) ? Number(tokens) : 0
   }));
   entries.sort((a, b) => a.date.localeCompare(b.date));
-  return entries.slice(-14);
+  return entries.slice(-limit);
 }
 
 function updateTokenHistory(currentTotal, today) {
@@ -117,7 +117,7 @@ function updateTokenHistory(currentTotal, today) {
   const history = { ...data.history };
   if (!history[today]) history[today] = 0;
   history[today] += delta;
-  const pruned = normalizeHistoryEntries(history).reduce((acc, entry) => {
+  const pruned = normalizeHistoryEntries(history, 5).reduce((acc, entry) => {
     acc[entry.date] = entry.tokens;
     return acc;
   }, {});
@@ -282,8 +282,15 @@ const server = http.createServer(async (req, res) => {
       }
 
       const tokenHistoryData = loadOrUpdateTokenHistory(tokens?.totalTokens);
-      const tokenHistoryArray = normalizeHistoryEntries(tokenHistoryData.history);
+      const tokenHistoryArray = normalizeHistoryEntries(tokenHistoryData.history, 5);
 
+      const percentChange = (() => {
+        if (tokenHistoryArray.length < 2) return null;
+        const last = tokenHistoryArray[tokenHistoryArray.length - 1].tokens;
+        const prev = tokenHistoryArray[tokenHistoryArray.length - 2].tokens || 1;
+        if (prev === 0) return last === 0 ? 0 : 100;
+        return ((last - prev) / prev) * 100;
+      })();
       return safeJson(res, 200, {
         ok: true,
         jobs: jobInsights,
@@ -291,6 +298,7 @@ const server = http.createServer(async (req, res) => {
         latestTrade,
         tokens,
         tokenHistory: tokenHistoryArray,
+        tokenChangePercent: percentChange,
         nextExit: {
           target: DEFAULT_EXIT_TARGET,
           trailingStart: TRAILING_START,
