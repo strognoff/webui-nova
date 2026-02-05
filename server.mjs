@@ -247,19 +247,22 @@ const server = http.createServer(async (req, res) => {
       }
 
       let latestTrade = null;
+      let latestEntryPrice = null;
       try {
         const latestRows = await runSqliteJson(dbPath, `SELECT id, status, asset, timestamp, entry_price, exit_price, realized_pnl FROM trades ORDER BY timestamp DESC LIMIT 1;`);
         if (latestRows[0]) {
           const row = latestRows[0];
+          const entryPrice = Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null;
           latestTrade = {
             id: row.id,
             status: row.status,
             asset: row.asset,
             timestamp: row.timestamp,
-            entryPrice: Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null,
+            entryPrice,
             exitPrice: Number.isFinite(Number(row.exit_price)) ? Number(row.exit_price) : null,
             realizedPnl: Number.isFinite(Number(row.realized_pnl)) ? Number(row.realized_pnl) : null
           };
+          latestEntryPrice = entryPrice;
         }
       } catch (err) {
         console.error('failed to read latest trade', err?.message || err);
@@ -302,6 +305,7 @@ const server = http.createServer(async (req, res) => {
         nextExit: {
           target: DEFAULT_EXIT_TARGET,
           trailingStart: TRAILING_START,
+          entryPrice: latestEntryPrice,
           note: EXIT_NOTE
         }
       });

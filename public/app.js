@@ -505,7 +505,8 @@ function renderTokenChange(percent) {
 function renderNextExit(exit) {
   if (!nextExitEl) return;
   if (exit && typeof exit.target === 'number') {
-    nextExitEl.textContent = `🎯 Target ${exit.target.toLocaleString()} USD · 🛡️ Trail starts ${exit.trailingStart?.toLocaleString() || '??'} USD`;
+    const entryText = exit.entryPrice ? ` · Entry ${exit.entryPrice.toLocaleString()} USD` : '';
+    nextExitEl.textContent = `🎯 Target ${exit.target.toLocaleString()} USD${entryText} · 🛡️ Trail starts ${exit.trailingStart?.toLocaleString() || '??'} USD`;
     if (nextExitNoteEl) {
       nextExitNoteEl.textContent = exit.note ? `💡 ${exit.note}` : '';
     }
