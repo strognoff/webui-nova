@@ -70,6 +70,9 @@ async function runSqliteJson(dbPath, query) {
 }
 
 const baseDir = path.dirname(new URL(import.meta.url).pathname);
+const DEFAULT_EXIT_TARGET = 74500;
+const TRAILING_START = 74000;
+const EXIT_NOTE = 'Raise the stop once BTC clears 74,000 so that 74,500 is the full-profit target.';
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -220,7 +223,12 @@ const server = http.createServer(async (req, res) => {
         jobs: jobInsights,
         profitLoss,
         latestTrade,
-        tokens
+        tokens,
+        nextExit: {
+          target: DEFAULT_EXIT_TARGET,
+          trailingStart: TRAILING_START,
+          note: EXIT_NOTE
+        }
       });
     }
 

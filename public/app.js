@@ -11,6 +11,8 @@ const insightsJobsEl = document.getElementById('insightsStatus');
 const profitLossEl = document.getElementById('profitLoss');
 const tokenUsageEl = document.getElementById('tokenUsage');
 const latestTradeEl = document.getElementById('latestTrade');
+const nextExitEl = document.getElementById('nextExit');
+const nextExitNoteEl = document.getElementById('nextExitNote');
 const refreshInsightsBtn = document.getElementById('refreshInsights');
 
 const mouth = document.getElementById('mouth');
@@ -455,6 +457,19 @@ function renderTokens(tokens) {
   }
 }
 
+function renderNextExit(exit) {
+  if (!nextExitEl) return;
+  if (exit && typeof exit.target === 'number') {
+    nextExitEl.textContent = `Target ${exit.target.toLocaleString()} USD`;
+    if (nextExitNoteEl) {
+      nextExitNoteEl.textContent = exit.note || '';
+    }
+  } else {
+    nextExitEl.textContent = 'Next exit TBD';
+    if (nextExitNoteEl) nextExitNoteEl.textContent = '';
+  }
+}
+
 async function refreshInsights() {
   if (!insightsJobsEl) return;
   insightsJobsEl.textContent = 'Loading…';
@@ -469,6 +484,7 @@ async function refreshInsights() {
     renderProfitLoss(data.profitLoss);
     renderTokens(data.tokens);
     renderLatestTrade(data.latestTrade);
+    renderNextExit(data.nextExit);
   } catch (err) {
     insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;
     if (profitLossEl) profitLossEl.textContent = 'Unable to load profit/loss.';
