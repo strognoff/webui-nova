@@ -5,6 +5,8 @@ node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+webui.log
+webui.pid
 
 # OS/editor
 .DS_Store

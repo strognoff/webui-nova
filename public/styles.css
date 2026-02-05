@@ -257,3 +257,28 @@ h3 {
 .token-change.negative {
   color: #ff8a6e;
 }
+
+.open-trade-row {
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255,255,255,0.02);
+}
+
+.open-trade-row + .open-trade-row {
+  margin-top: 8px;
+}
+
+.open-trade-id {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.open-trade-meta {
+  font-size: 12px;
+  color: var(--muted);
+  text-align: right;
+}

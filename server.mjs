@@ -268,6 +268,19 @@ const server = http.createServer(async (req, res) => {
         console.error('failed to read latest trade', err?.message || err);
       }
 
+      let openTrades = [];
+      try {
+        const rows = await runSqliteJson(dbPath, `SELECT id, asset, timestamp, entry_price FROM trades WHERE status='executed' AND exit_price IS NULL ORDER BY timestamp ASC;`);
+        openTrades = rows.map(row => ({
+          id: row.id,
+          asset: row.asset,
+          timestamp: row.timestamp,
+          entryPrice: Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null
+        }));
+      } catch (err) {
+        console.error('failed to read open trades', err?.message || err);
+      }
+
       let tokens = null;
       try {
         const sessionsPath = path.join(HOME_DIR, '.openclaw', 'agents', 'main', 'sessions', 'sessions.json');
@@ -299,6 +312,7 @@ const server = http.createServer(async (req, res) => {
         jobs: jobInsights,
         profitLoss,
         latestTrade,
+        openTrades,
         tokens,
         tokenHistory: tokenHistoryArray,
         tokenChangePercent: percentChange,

@@ -11,6 +11,7 @@ const insightsJobsEl = document.getElementById('insightsStatus');
 const profitLossEl = document.getElementById('profitLoss');
 const tokenUsageEl = document.getElementById('tokenUsage');
 const latestTradeEl = document.getElementById('latestTrade');
+const openTradesEl = document.getElementById('openTrades');
 const nextExitEl = document.getElementById('nextExit');
 const nextExitNoteEl = document.getElementById('nextExitNote');
 const tokenGraphEl = document.getElementById('tokenGraph');
@@ -451,6 +452,29 @@ function renderLatestTrade(trade) {
   }
 }
 
+function renderOpenTrades(trades) {
+  if (!openTradesEl) return;
+  openTradesEl.innerHTML = '';
+  if (!Array.isArray(trades) || trades.length === 0) {
+    openTradesEl.textContent = 'No open paper trades.';
+    return;
+  }
+  trades.forEach(trade => {
+    const row = document.createElement('div');
+    row.className = 'open-trade-row';
+    const info = document.createElement('div');
+    const entryPriceText = trade.entryPrice ? `Entry ${trade.entryPrice.toLocaleString()} USD` : 'Entry not recorded';
+    const when = trade.timestamp ? formatDate(trade.timestamp) : 'unknown time';
+    info.innerHTML = `<strong>💼 ${trade.asset || 'BTC-USD'}</strong><div class="open-trade-id">${trade.id.slice(0, 8)}… · ${when}</div>`;
+    const meta = document.createElement('div');
+    meta.className = 'open-trade-meta';
+    meta.textContent = entryPriceText;
+    row.appendChild(info);
+    row.appendChild(meta);
+    openTradesEl.appendChild(row);
+  });
+}
+
 function renderTokens(tokens) {
   if (!tokenUsageEl) return;
   if (tokens && typeof tokens.totalTokens === 'number') {
@@ -532,6 +556,7 @@ async function refreshInsights() {
     renderTokenHistoryGraph(data.tokenHistory);
     renderTokenChange(data.tokenChangePercent);
     renderLatestTrade(data.latestTrade);
+    renderOpenTrades(data.openTrades);
     renderNextExit(data.nextExit);
   } catch (err) {
     insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;
