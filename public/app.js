@@ -442,7 +442,7 @@ function renderLatestTrade(trade) {
   if (trade?.id) {
     const pnlText = typeof trade.realizedPnl === 'number' ? currencyFormatter.format(trade.realizedPnl) : '—';
     const when = trade.timestamp ? formatDate(trade.timestamp) : 'unknown time';
-    latestTradeEl.textContent = `Last trade ${trade.id} (${trade.status || 'unknown'}) — ${pnlText} ${trade.asset || ''} at ${when}`;
+    latestTradeEl.textContent = `⚡ ${trade.status?.toUpperCase() || 'UNKNOWN'} ${trade.asset || ''} · ${pnlText} · ${when}`;
   } else {
     latestTradeEl.textContent = 'No trade history yet.';
   }
@@ -460,9 +460,9 @@ function renderTokens(tokens) {
 function renderNextExit(exit) {
   if (!nextExitEl) return;
   if (exit && typeof exit.target === 'number') {
-    nextExitEl.textContent = `Target ${exit.target.toLocaleString()} USD`;
+    nextExitEl.textContent = `🎯 Target ${exit.target.toLocaleString()} USD · 🛡️ Trail starts ${exit.trailingStart?.toLocaleString() || '??'} USD`;
     if (nextExitNoteEl) {
-      nextExitNoteEl.textContent = exit.note || '';
+      nextExitNoteEl.textContent = exit.note ? `💡 ${exit.note}` : '';
     }
   } else {
     nextExitEl.textContent = 'Next exit TBD';
