@@ -70,6 +70,8 @@ async function runSqliteJson(dbPath, query) {
 }
 
 const baseDir = path.dirname(new URL(import.meta.url).pathname);
+const DIST_DIR = path.join(baseDir, '..', 'nova-ui-react', 'dist');
+const ASSET_DIR = path.join(DIST_DIR, 'assets');
 const DEFAULT_EXIT_TARGET = 74500;
 const TRAILING_START = 74000;
 const EXIT_NOTE = 'Raise the stop once BTC clears 74,000 so that 74,500 is the full-profit target.';
@@ -141,24 +143,25 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${WEB_PORT}`);
 
+    const distDir = path.join(baseDir, '..', 'nova-ui-react', 'dist');
+
     if (req.method === 'GET' && url.pathname === '/') {
-      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'index.html'), 'text/html; charset=utf-8');
+      return serveFile(res, path.join(distDir, 'index.html'), 'text/html; charset=utf-8');
     }
-    if (req.method === 'GET' && url.pathname.startsWith('/assets/')) {
-      const assetPath = path.join(baseDir, '..', 'nova-ui-react', 'dist', url.pathname.substring(1));
-      const ext = path.extname(assetPath);
-      const type = ext === '.js'
-        ? 'text/javascript; charset=utf-8'
-        : ext === '.css'
-          ? 'text/css; charset=utf-8'
-          : 'application/octet-stream';
-      return serveFile(res, assetPath, type);
-    }
-    if (req.method === 'GET' && url.pathname === '/app.js') {
-      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'assets', 'index-TW31Yimb.js'), 'text/javascript; charset=utf-8');
-    }
-    if (req.method === 'GET' && url.pathname === '/styles.css') {
-      return serveFile(res, path.join(baseDir, '..', 'nova-ui-react', 'dist', 'assets', 'index-Bq6AvQf8.css'), 'text/css; charset=utf-8');
+
+    if (req.method === 'GET') {
+      const candidate = path.join(distDir, url.pathname.replace(/^\//, ''));
+      if (candidate.startsWith(distDir) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        const ext = path.extname(candidate);
+        const type = ext === '.js'
+          ? 'text/javascript; charset=utf-8'
+          : ext === '.css'
+            ? 'text/css; charset=utf-8'
+            : ext === '.svg'
+              ? 'image/svg+xml'
+              : 'application/octet-stream';
+        return serveFile(res, candidate, type);
+      }
     }
 
     if (req.method === 'GET' && url.pathname === '/api/status') {
