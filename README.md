@@ -15,7 +15,9 @@ It’s meant to be:
 
 - Shows a minimal chat UI + a lightweight animated SVG face (now more animated).
 - Displays chat status (idle / thinking / error) and connection status.
+- Chat input supports multi‑line (10+ lines). Shift+Enter for newline.
 - Insights focus on cron health + token usage (trading widgets removed).
+- Insights refresh uses no‑cache timestamp to keep "next cron" accurate.
 - Connects to the **OpenClaw Gateway WebSocket** and uses:
   - `sessions.list` to populate the session dropdown
   - `chat.history` to load conversation history
