@@ -499,10 +499,10 @@ function renderActivity(updates) {
     const shortSha = u.sha ? u.sha.slice(0, 7) : 'n/a';
     item.innerHTML = `
       <div class="insight-item-header">
-        <strong>${u.repo}</strong>
-        <span>${shortSha}</span>
+        <strong>${u.title || 'Update'}</strong>
+        <span>${when}</span>
       </div>
-      <div class="insight-item-status">${u.subject || 'Update'} · ${when}</div>
+      <div class="insight-item-status">${u.detail || ''}</div>
     `;
     activityFeedEl.appendChild(item);
   });
