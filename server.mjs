@@ -325,6 +325,55 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+
+    if (req.method === 'GET' && url.pathname === '/api/activity') {
+      const roots = [
+        path.join(HOME_DIR, '.openclaw', 'workspace', 'repos'),
+        path.join(HOME_DIR, '.openclaw', 'workspace', 'fire-tv-dashboard'),
+        path.join(HOME_DIR, '.openclaw', 'workspace', 'webui-nova')
+      ];
+
+      const repos = [];
+      for (const root of roots) {
+        try {
+          if (!fs.existsSync(root)) continue;
+          if (fs.existsSync(path.join(root, '.git'))) {
+            repos.push(root);
+            continue;
+          }
+          const entries = fs.readdirSync(root, { withFileTypes: true });
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const repoPath = path.join(root, entry.name);
+            if (fs.existsSync(path.join(repoPath, '.git'))) repos.push(repoPath);
+          }
+        } catch (err) {
+          console.error('activity scan failed', err?.message || err);
+        }
+      }
+
+      const updates = [];
+      for (const repo of repos) {
+        try {
+          const { stdout } = await execFileAsync('git', ['-C', repo, 'log', '-1', '--pretty=%H|%ct|%s'], { maxBuffer: 1_000_000 });
+          const line = stdout.trim();
+          if (!line) continue;
+          const [sha, ts, subject] = line.split('|');
+          updates.push({
+            repo: path.basename(repo),
+            sha,
+            ts: Number(ts) * 1000,
+            subject: subject || ''
+          });
+        } catch (err) {
+          // ignore repos without history
+        }
+      }
+
+      updates.sort((a, b) => b.ts - a.ts);
+      return safeJson(res, 200, { ok: true, updates: updates.slice(0, 5) });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/respond') {
       const cfg = readConfig();
       const gatewayPort = cfg?.gateway?.port;

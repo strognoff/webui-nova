@@ -15,6 +15,7 @@ const tokenGraphEl = document.getElementById('tokenGraph');
 const tokenGraphLabel = document.getElementById('tokenGraphLabel');
 const tokenChangePercentEl = document.getElementById('tokenChangePercent');
 const refreshInsightsBtn = document.getElementById('refreshInsights');
+const activityFeedEl = document.getElementById('activityFeed');
 
 const mouth = document.getElementById('mouth');
 const pupilL = document.getElementById('pupilL');
@@ -483,6 +484,30 @@ function renderTokenHistoryGraph(history) {
   if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 London dates).';
 }
 
+
+function renderActivity(updates) {
+  if (!activityFeedEl) return;
+  activityFeedEl.innerHTML = '';
+  if (!Array.isArray(updates) || updates.length === 0) {
+    activityFeedEl.textContent = 'No updates yet.';
+    return;
+  }
+  updates.forEach((u) => {
+    const item = document.createElement('div');
+    item.className = 'insight-item';
+    const when = u.ts ? formatDate(u.ts) : 'unknown';
+    const shortSha = u.sha ? u.sha.slice(0, 7) : 'n/a';
+    item.innerHTML = `
+      <div class="insight-item-header">
+        <strong>${u.repo}</strong>
+        <span>${shortSha}</span>
+      </div>
+      <div class="insight-item-status">${u.subject || 'Update'} · ${when}</div>
+    `;
+    activityFeedEl.appendChild(item);
+  });
+}
+
 function renderTokenChange(percent) {
   if (!tokenChangePercentEl) return;
   if (percent === null || percent === undefined || Number.isNaN(percent)) {
@@ -507,6 +532,14 @@ function refreshInsights() {
     renderTokens(data.tokens);
     renderTokenHistoryGraph(data.tokenHistory);
     renderTokenChange(data.tokenChangePercent);
+
+    try {
+      const activityResp = await fetch('/api/activity?ts=' + Date.now(), { cache: 'no-store' });
+      const activityData = await activityResp.json();
+      if (activityData?.ok) renderActivity(activityData.updates || []);
+    } catch {
+      // ignore
+    }
   } catch (err) {
     insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;
     if (tokenUsageEl) tokenUsageEl.textContent = 'Unable to load token usage.';
