@@ -5,15 +5,12 @@ const clearBtn = document.getElementById('clear');
 const statusEl = document.getElementById('status');
 const reconnectBtn = document.getElementById('reconnect');
 const moodEl = document.getElementById('mood');
+const chatStatusEl = document.getElementById('chatStatus');
+const connectionStatusEl = document.getElementById('connectionStatus');
 const sessionSelect = document.getElementById('sessionSelect');
 const sessionKeyBadge = document.getElementById('sessionKey');
 const insightsJobsEl = document.getElementById('insightsStatus');
-const profitLossEl = document.getElementById('profitLoss');
 const tokenUsageEl = document.getElementById('tokenUsage');
-const latestTradeEl = document.getElementById('latestTrade');
-const openTradesEl = document.getElementById('openTrades');
-const nextExitEl = document.getElementById('nextExit');
-const nextExitNoteEl = document.getElementById('nextExitNote');
 const tokenGraphEl = document.getElementById('tokenGraph');
 const tokenGraphLabel = document.getElementById('tokenGraphLabel');
 const tokenChangePercentEl = document.getElementById('tokenChangePercent');
@@ -24,6 +21,8 @@ const pupilL = document.getElementById('pupilL');
 const pupilR = document.getElementById('pupilR');
 const browL = document.getElementById('browL');
 const browR = document.getElementById('browR');
+const faceGroup = document.getElementById('face');
+const headCircle = document.getElementById('head');
 
 let ws = null;
 let connected = false;
@@ -53,6 +52,16 @@ function addMsg(role, text) {
 function setStatus(text, ok = false, bad = false) {
   statusEl.textContent = text;
   statusEl.className = 'badge' + (ok ? ' ok' : '') + (bad ? ' bad' : '');
+  if (connectionStatusEl) {
+    connectionStatusEl.textContent = text;
+    connectionStatusEl.className = 'badge' + (ok ? ' ok' : '') + (bad ? ' bad' : '');
+  }
+}
+
+function setChatStatus(text, ok = false, bad = false) {
+  if (!chatStatusEl) return;
+  chatStatusEl.textContent = text;
+  chatStatusEl.className = 'badge' + (ok ? ' ok' : '') + (bad ? ' bad' : '');
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -162,6 +171,7 @@ function onChatEvent(payload) {
     if (currentAssistantMsgEl && text) currentAssistantMsgEl.textContent = text;
     setMood(inferMood(text));
     isReplying = false;
+    setChatStatus('idle', true, false);
     lastRunId = null;
     currentAssistantMsgEl = null;
     // restore baseline mouth
@@ -171,6 +181,7 @@ function onChatEvent(payload) {
 
   if (payload.state === 'error' || payload.state === 'aborted') {
     isReplying = false;
+    setChatStatus('idle', true, false);
     lastRunId = null;
     if (currentAssistantMsgEl) currentAssistantMsgEl.textContent = payload.errorMessage || 'Error.';
     currentAssistantMsgEl = null;
@@ -242,6 +253,7 @@ async function connect() {
         await request('connect', params);
         connected = true;
         setStatus('connected', true, false);
+        setChatStatus('idle', true, false);
 
         await refreshSessions();
 
@@ -258,6 +270,7 @@ async function connect() {
 
     ws.addEventListener('close', (ev) => {
       connected = false;
+      setChatStatus('disconnected', false, true);
       const code = ev?.code;
       const reason = ev?.reason;
       const extra = (code || reason) ? ` (${code || ''}${code && reason ? ': ' : ''}${reason || ''})` : '';
@@ -270,10 +283,12 @@ async function connect() {
     ws.addEventListener('error', (ev) => {
       connected = false;
       setStatus('ws error (see console)', false, true);
+      setChatStatus('disconnected', false, true);
       console.error('ws error', ev);
     });
   } catch (e) {
     setStatus(`connect error: ${e?.message || e}`, false, true);
+    setChatStatus('disconnected', false, true);
   }
 }
 
@@ -349,6 +364,7 @@ async function send() {
   addMsg('user', msg);
   currentAssistantMsgEl = addMsg('assistant', '…');
   isReplying = true;
+  setChatStatus('thinking');
   lastRunId = uuid();
 
   try {
@@ -369,6 +385,7 @@ async function send() {
   } catch (e) {
     currentAssistantMsgEl.textContent = `Error: ${e.message}`;
     isReplying = false;
+    setChatStatus('error', false, true);
     setMood('serious');
     setMood(mood);
   }
@@ -427,54 +444,6 @@ function renderJobs(jobs = []) {
   }
 }
 
-function renderProfitLoss(profitLoss) {
-  if (!profitLossEl) return;
-  if (profitLoss && typeof profitLoss.totalPnl === 'number') {
-    profitLossEl.innerHTML = `
-      <strong>${currencyFormatter.format(profitLoss.totalPnl)}</strong>
-      <div class="small">
-        ${profitLoss.trades} trade(s) • ${profitLoss.wins} wins • ${profitLoss.losses} losses • win rate ${profitLoss.winRate.toFixed(1)}%
-      </div>
-    `;
-  } else {
-    profitLossEl.textContent = 'No closed trades captured yet.';
-  }
-}
-
-function renderLatestTrade(trade) {
-  if (!latestTradeEl) return;
-  if (trade?.id) {
-    const pnlText = typeof trade.realizedPnl === 'number' ? currencyFormatter.format(trade.realizedPnl) : '—';
-    const when = trade.timestamp ? formatDate(trade.timestamp) : 'unknown time';
-    latestTradeEl.textContent = `⚡ ${trade.status?.toUpperCase() || 'UNKNOWN'} ${trade.asset || ''} · ${pnlText} · ${when}`;
-  } else {
-    latestTradeEl.textContent = 'No trade history yet.';
-  }
-}
-
-function renderOpenTrades(trades) {
-  if (!openTradesEl) return;
-  openTradesEl.innerHTML = '';
-  if (!Array.isArray(trades) || trades.length === 0) {
-    openTradesEl.textContent = 'No open paper trades.';
-    return;
-  }
-  trades.forEach(trade => {
-    const row = document.createElement('div');
-    row.className = 'open-trade-row';
-    const info = document.createElement('div');
-    const entryPriceText = trade.entryPrice ? `Entry ${trade.entryPrice.toLocaleString()} USD` : 'Entry not recorded';
-    const when = trade.timestamp ? formatDate(trade.timestamp) : 'unknown time';
-    info.innerHTML = `<strong>💼 ${trade.asset || 'BTC-USD'}</strong><div class="open-trade-id">${trade.id.slice(0, 8)}… · ${when}</div>`;
-    const meta = document.createElement('div');
-    meta.className = 'open-trade-meta';
-    meta.textContent = entryPriceText;
-    row.appendChild(info);
-    row.appendChild(meta);
-    openTradesEl.appendChild(row);
-  });
-}
-
 function renderTokens(tokens) {
   if (!tokenUsageEl) return;
   if (tokens && typeof tokens.totalTokens === 'number') {
@@ -526,44 +495,22 @@ function renderTokenChange(percent) {
   tokenChangePercentEl.className = `token-change ${percent >= 0 ? 'positive' : 'negative'}`;
 }
 
-function renderNextExit(exit) {
-  if (!nextExitEl) return;
-  if (exit && typeof exit.target === 'number') {
-    const entryText = exit.entryPrice ? ` · Entry ${exit.entryPrice.toLocaleString()} USD` : '';
-    nextExitEl.textContent = `🎯 Target ${exit.target.toLocaleString()} USD${entryText} · 🛡️ Trail starts ${exit.trailingStart?.toLocaleString() || '??'} USD`;
-    if (nextExitNoteEl) {
-      nextExitNoteEl.textContent = exit.note ? `💡 ${exit.note}` : '';
-    }
-  } else {
-    nextExitEl.textContent = 'Next exit TBD';
-    if (nextExitNoteEl) nextExitNoteEl.textContent = '';
-  }
-}
-
-async function refreshInsights() {
+function refreshInsights() {
   if (!insightsJobsEl) return;
   insightsJobsEl.textContent = 'Loading…';
-  if (profitLossEl) profitLossEl.textContent = 'Loading…';
   if (tokenUsageEl) tokenUsageEl.textContent = 'Loading…';
-  if (latestTradeEl) latestTradeEl.textContent = '';
   try {
-    const resp = await fetch('/api/insights');
+    const resp = await fetch('/api/insights?ts=' + Date.now(), { cache: 'no-store' });
     const data = await resp.json();
     if (!data?.ok) throw new Error(data?.error || 'failed to load insights');
     renderJobs(data.jobs || []);
-    renderProfitLoss(data.profitLoss);
     renderTokens(data.tokens);
     renderTokenHistoryGraph(data.tokenHistory);
     renderTokenChange(data.tokenChangePercent);
-    renderLatestTrade(data.latestTrade);
-    renderOpenTrades(data.openTrades);
-    renderNextExit(data.nextExit);
   } catch (err) {
     insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;
-    if (profitLossEl) profitLossEl.textContent = 'Unable to load profit/loss.';
     if (tokenUsageEl) tokenUsageEl.textContent = 'Unable to load token usage.';
-    if (latestTradeEl) latestTradeEl.textContent = '';
-  }
+    }
 }
 
 // Idle animation
@@ -584,6 +531,9 @@ function tick(t) {
   t0 = t;
 
   const s = isReplying ? 1.8 : 1.0;
+  const bob = Math.sin(t / 1200) * 2;
+  if (faceGroup) faceGroup.setAttribute('transform', `translate(0, ${bob.toFixed(2)})`);
+  if (headCircle) headCircle.setAttribute('cy', (112 + bob * 0.5).toFixed(2));
   const x = Math.sin(t / 900) * 5 * s;
   const y = Math.cos(t / 1100) * 3 * s;
   pupilL.setAttribute('cx', (82 + x).toFixed(2));
@@ -630,6 +580,7 @@ refreshInsightsBtn?.addEventListener('click', (e) => {
 });
 
 setMood('neutral');
+setChatStatus('idle');
 connect();
 requestAnimationFrame(tick);
 refreshInsights();

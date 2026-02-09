@@ -13,7 +13,9 @@ It’s meant to be:
 
 ## What it does
 
-- Shows a minimal chat UI + a lightweight animated SVG face.
+- Shows a minimal chat UI + a lightweight animated SVG face (now more animated).
+- Displays chat status (idle / thinking / error) and connection status.
+- Insights focus on cron health + token usage (trading widgets removed).
 - Connects to the **OpenClaw Gateway WebSocket** and uses:
   - `sessions.list` to populate the session dropdown
   - `chat.history` to load conversation history

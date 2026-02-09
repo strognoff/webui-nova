@@ -72,9 +72,6 @@ async function runSqliteJson(dbPath, query) {
 const baseDir = path.dirname(new URL(import.meta.url).pathname);
 const DIST_DIR = path.join(baseDir, '..', 'nova-ui-react', 'dist');
 const ASSET_DIR = path.join(DIST_DIR, 'assets');
-const DEFAULT_EXIT_TARGET = 74500;
-const TRAILING_START = 74000;
-const EXIT_NOTE = 'Raise the stop once BTC clears 74,000 so that 74,500 is the full-profit target.';
 const TOKEN_HISTORY_PATH = path.join(HOME_DIR, '.openclaw', 'workspace', 'data', 'token_usage.json');
 
 function londonDateString() {
@@ -194,6 +191,78 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/sessions') {
+      try {
+        const sessionsPath = path.join(HOME_DIR, '.openclaw', 'agents', 'main', 'sessions', 'sessions.json');
+        const rawSessions = fs.readFileSync(sessionsPath, 'utf8');
+        const sessions = JSON.parse(rawSessions);
+        const items = Object.entries(sessions || {}).map(([key, value]) => ({
+          key,
+          label: value?.label || key,
+          totalTokens: value?.totalTokens || 0,
+          lastUpdated: value?.lastUpdated || null
+        }));
+        items.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+        return safeJson(res, 200, { ok: true, sessions: items });
+      } catch (err) {
+        return safeJson(res, 500, { ok: false, error: err?.message || String(err) });
+      }
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/session-history') {
+      try {
+        const sessionKey = url.searchParams.get('sessionKey');
+        const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 200);
+        if (!sessionKey) {
+          return safeJson(res, 400, { ok: false, error: 'sessionKey required' });
+        }
+        const sessionsPath = path.join(HOME_DIR, '.openclaw', 'agents', 'main', 'sessions', 'sessions.json');
+        const rawSessions = fs.readFileSync(sessionsPath, 'utf8');
+        const sessions = JSON.parse(rawSessions);
+        const sess = sessions?.[sessionKey];
+        const sessionFile = sess?.sessionFile;
+        if (!sessionFile || !fs.existsSync(sessionFile)) {
+          return safeJson(res, 404, { ok: false, error: 'session file not found' });
+        }
+        const raw = fs.readFileSync(sessionFile, 'utf8');
+        const lines = raw.split('\n').filter(Boolean);
+        const messages = [];
+        for (const line of lines) {
+          try {
+            const entry = JSON.parse(line);
+            if (entry?.type !== 'message') continue;
+            const msg = entry?.message;
+            const role = msg?.role;
+            if (!role || !['user', 'assistant', 'system'].includes(role)) continue;
+            const content = Array.isArray(msg?.content) ? msg.content : [];
+            const textParts = content
+              .map(part => {
+                if (!part) return null;
+                if (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text') {
+                  return part.text || null;
+                }
+                return null;
+              })
+              .filter(Boolean);
+            const text = textParts.join('\n').trim();
+            if (!text) continue;
+            messages.push({
+              id: entry.id,
+              role,
+              text,
+              timestamp: entry.timestamp
+            });
+          } catch (err) {
+            // ignore parse errors
+          }
+        }
+        const sliced = messages.slice(-limit);
+        return safeJson(res, 200, { ok: true, messages: sliced });
+      } catch (err) {
+        return safeJson(res, 500, { ok: false, error: err?.message || String(err) });
+      }
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/insights') {
       const jobsPath = path.join(HOME_DIR, '.openclaw', 'cron', 'jobs.json');
       let jobInsights = [];
@@ -219,79 +288,6 @@ const server = http.createServer(async (req, res) => {
         });
       } catch (err) {
         console.error('failed to read cron jobs', err?.message || err);
-      }
-
-      const dbPath = path.join(HOME_DIR, '.openclaw', 'workspace', 'repos', 'coinbase-trading-support', 'data', 'trades.db');
-      const statsQuery = `SELECT
-        COUNT(*) AS trades,
-        IFNULL(SUM(realized_pnl), 0) AS total_pnl,
-        IFNULL(AVG(realized_pnl), 0) AS average_pnl,
-        SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN realized_pnl < 0 THEN 1 ELSE 0 END) AS losses,
-        SUM(CASE WHEN realized_pnl > 0 THEN realized_pnl ELSE 0 END) AS win_amount,
-        SUM(CASE WHEN realized_pnl < 0 THEN realized_pnl ELSE 0 END) AS loss_amount
-      FROM trades
-      WHERE realized_pnl IS NOT NULL;`;
-
-      let profitLoss = null;
-      try {
-        const statsRows = await runSqliteJson(dbPath, statsQuery);
-        const row = statsRows[0] || {};
-        const trades = Number.isFinite(Number(row.trades)) ? Number(row.trades) : 0;
-        const wins = Number.isFinite(Number(row.wins)) ? Number(row.wins) : 0;
-        const losses = Number.isFinite(Number(row.losses)) ? Number(row.losses) : 0;
-        const totalPnl = Number.isFinite(Number(row.total_pnl)) ? Number(row.total_pnl) : 0;
-        const averagePnl = Number.isFinite(Number(row.average_pnl)) ? Number(row.average_pnl) : 0;
-        const winAmount = Number.isFinite(Number(row.win_amount)) ? Number(row.win_amount) : 0;
-        const lossAmount = Number.isFinite(Number(row.loss_amount)) ? Number(row.loss_amount) : 0;
-        const winRate = trades ? (wins / trades) * 100 : 0;
-        profitLoss = {
-          trades,
-          totalPnl,
-          averagePnl,
-          wins,
-          losses,
-          winRate,
-          winAmount,
-          lossAmount
-        };
-      } catch (err) {
-        console.error('failed to read ledger stats', err?.message || err);
-      }
-
-      let latestTrade = null;
-      let latestEntryPrice = null;
-      try {
-        const latestRows = await runSqliteJson(dbPath, `SELECT id, status, asset, timestamp, entry_price, exit_price, realized_pnl FROM trades ORDER BY timestamp DESC LIMIT 1;`);
-        if (latestRows[0]) {
-          const row = latestRows[0];
-          const entryPrice = Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null;
-          latestTrade = {
-            id: row.id,
-            status: row.status,
-            asset: row.asset,
-            timestamp: row.timestamp,
-            entryPrice,
-            exitPrice: Number.isFinite(Number(row.exit_price)) ? Number(row.exit_price) : null,
-            realizedPnl: Number.isFinite(Number(row.realized_pnl)) ? Number(row.realized_pnl) : null
-          };
-          latestEntryPrice = entryPrice;
-        }
-      } catch (err) {
-        console.error('failed to read latest trade', err?.message || err);
-      }
-
-      let openTrades = [];
-      try {
-        const rows = await runSqliteJson(dbPath, `SELECT id, asset, timestamp, entry_price FROM trades WHERE status='executed' AND exit_price IS NULL ORDER BY timestamp ASC;`);
-        openTrades = rows.map(row => ({
-          id: row.id,
-          asset: row.asset,
-          timestamp: row.timestamp,
-          entryPrice: Number.isFinite(Number(row.entry_price)) ? Number(row.entry_price) : null
-        }));
-      } catch (err) {
-        console.error('failed to read open trades', err?.message || err);
       }
 
       let tokens = null;
@@ -323,18 +319,9 @@ const server = http.createServer(async (req, res) => {
       return safeJson(res, 200, {
         ok: true,
         jobs: jobInsights,
-        profitLoss,
-        latestTrade,
-        openTrades,
         tokens,
         tokenHistory: tokenHistoryArray,
         tokenChangePercent: percentChange,
-        nextExit: {
-          target: DEFAULT_EXIT_TARGET,
-          trailingStart: TRAILING_START,
-          entryPrice: latestEntryPrice,
-          note: EXIT_NOTE
-        }
       });
     }
 
