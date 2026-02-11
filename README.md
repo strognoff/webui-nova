@@ -117,6 +117,34 @@ If you’re taking this project over, use this exact flow:
 - **No session list:** verify gateway token/config path and that gateway is running.
 - **UI source confusion:** front-end files are under `public/` (`index.html`, `app.js`, `styles.css`), server is `server.mjs`.
 
+## Activity Feed
+
+Endpoint:
+- `GET /api/activity-feed?limit=5`
+
+Contract:
+- Returns `{ items: ActivityEvent[] }`
+- `ActivityEvent` shape:
+  - `id` (string)
+  - `timestamp` (ISO-8601 UTC)
+  - `type` (string)
+  - `summary` (string)
+- Hard max of 5 items (larger `limit` is clamped)
+- Sorted newest-first by `timestamp`
+- Empty source returns `{ items: [] }`
+
+Source:
+- `~/.openclaw/workspace/activity-log.json` (`updates` array)
+
+Tests:
+```bash
+npm run test:activity
+```
+
+Troubleshooting (panel empty):
+- If endpoint returns `{ items: [] }`, either there are no events yet or `activity-log.json` is missing.
+- If panel shows error, use retry button and verify server is running on `127.0.0.1:18881`.
+
 ## Files
 
 - `server.mjs`: tiny Node HTTP server
