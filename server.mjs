@@ -174,6 +174,73 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/connection-status') {
+      try {
+        const cfg = readConfig();
+        const gatewayPort = cfg?.gateway?.port;
+        const token = cfg?.gateway?.auth?.token;
+        if (!gatewayPort || !token) {
+          return safeJson(res, 200, { ok: true, connected: false, reason: 'missing gateway config' });
+        }
+
+        const ping = await fetch(`http://${GATEWAY_HOST}:${gatewayPort}/tools/invoke`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tool: 'sessions_list',
+            args: { limit: 1 },
+            sessionKey: 'agent:main:main'
+          })
+        });
+
+        return safeJson(res, 200, {
+          ok: true,
+          connected: ping.ok,
+          statusCode: ping.status,
+          checkedAt: Date.now()
+        });
+      } catch (err) {
+        return safeJson(res, 200, { ok: true, connected: false, reason: err?.message || String(err), checkedAt: Date.now() });
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/reconnect') {
+      // Reconnect trigger for UI: currently a connectivity re-check only.
+      // Actual WS reconnect is handled by client by reopening socket.
+      try {
+        const cfg = readConfig();
+        const gatewayPort = cfg?.gateway?.port;
+        const token = cfg?.gateway?.auth?.token;
+        if (!gatewayPort || !token) {
+          return safeJson(res, 200, { ok: true, connected: false, reason: 'missing gateway config' });
+        }
+        const ping = await fetch(`http://${GATEWAY_HOST}:${gatewayPort}/tools/invoke`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            tool: 'sessions_list',
+            args: { limit: 1 },
+            sessionKey: 'agent:main:main'
+          })
+        });
+
+        return safeJson(res, 200, {
+          ok: true,
+          connected: ping.ok,
+          statusCode: ping.status,
+          checkedAt: Date.now()
+        });
+      } catch (err) {
+        return safeJson(res, 200, { ok: true, connected: false, reason: err?.message || String(err), checkedAt: Date.now() });
+      }
+    }
+
     // Provide gateway WS URL + token to the local UI.
     // Localhost-only web UI; do not expose this server on LAN.
     if (req.method === 'GET' && url.pathname === '/api/gateway') {
