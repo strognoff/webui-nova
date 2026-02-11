@@ -216,6 +216,22 @@ function extractAssistantText(message) {
   return null;
 }
 
+async function updateConnectionBadge() {
+  try {
+    const resp = await fetch('/api/connection-status?ts=' + Date.now(), { cache: 'no-store' });
+    const data = await resp.json();
+    if (data?.connected) {
+      setStatus('connected', true, false);
+      return true;
+    }
+    setStatus('disconnected', false, true);
+    return false;
+  } catch {
+    setStatus('disconnected', false, true);
+    return false;
+  }
+}
+
 async function connect() {
   try {
     setStatus('connecting…');
@@ -255,6 +271,7 @@ async function connect() {
         connected = true;
         setStatus('connected', true, false);
         setChatStatus('idle', true, false);
+        await updateConnectionBadge();
 
         await refreshSessions();
 
@@ -590,7 +607,13 @@ function tick(t) {
 
 // events
 sendBtn.addEventListener('click', send);
-reconnectBtn.addEventListener('click', connect);
+reconnectBtn.addEventListener('click', async () => {
+  try {
+    await fetch('/api/reconnect', { method: 'POST' });
+  } catch {}
+  await connect();
+  await updateConnectionBadge();
+});
 clearBtn.addEventListener('click', () => {
   chatEl.innerHTML = '';
   setMood('neutral');
@@ -615,6 +638,7 @@ refreshInsightsBtn?.addEventListener('click', (e) => {
 setMood('neutral');
 setChatStatus('idle');
 connect();
+updateConnectionBadge();
 requestAnimationFrame(tick);
 refreshInsights();
 setInterval(() => refreshInsights(), 60_000);
