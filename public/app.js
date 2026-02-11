@@ -502,24 +502,38 @@ function renderTokenHistoryGraph(history) {
 }
 
 
-function renderActivity(updates) {
+function normalizeActivityItems(payload) {
+  const raw = Array.isArray(payload?.items) ? payload.items : [];
+  return raw
+    .map((item, idx) => {
+      const ts = Date.parse(item?.timestamp || '');
+      return {
+        id: String(item?.id || `activity-${idx}`),
+        timestamp: Number.isFinite(ts) ? ts : 0,
+        summary: typeof item?.summary === 'string' && item.summary.trim() ? item.summary.trim() : 'Update'
+      };
+    })
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, 5);
+}
+
+function renderActivity(items) {
   if (!activityFeedEl) return;
   activityFeedEl.innerHTML = '';
-  if (!Array.isArray(updates) || updates.length === 0) {
-    activityFeedEl.textContent = 'No updates yet.';
+  if (!Array.isArray(items) || items.length === 0) {
+    activityFeedEl.textContent = 'No recent activity.';
     return;
   }
-  updates.forEach((u) => {
+  items.forEach((u) => {
     const item = document.createElement('div');
     item.className = 'insight-item';
-    const when = u.ts ? formatDate(u.ts) : 'unknown';
-    const shortSha = u.sha ? u.sha.slice(0, 7) : 'n/a';
+    const when = u.timestamp ? formatDate(u.timestamp) : 'unknown';
     item.innerHTML = `
       <div class="insight-item-header">
-        <strong>${u.title || 'Update'}</strong>
+        <strong title="${u.summary}">${u.summary}</strong>
         <span>${when}</span>
       </div>
-      <div class="insight-item-status">${u.detail || ''}</div>
+      <div class="insight-item-status">${u.summary}</div>
     `;
     activityFeedEl.appendChild(item);
   });
@@ -550,12 +564,25 @@ async function refreshInsights() {
     renderTokenHistoryGraph(data.tokenHistory);
     renderTokenChange(data.tokenChangePercent);
 
+    if (activityFeedEl) activityFeedEl.textContent = 'Loading recent activity…';
     try {
-      const activityResp = await fetch('/api/activity?ts=' + Date.now(), { cache: 'no-store' });
+      const activityResp = await fetch('/api/activity-feed?limit=5&ts=' + Date.now(), { cache: 'no-store' });
       const activityData = await activityResp.json();
-      if (activityData?.ok) renderActivity(activityData.updates || []);
+      const items = normalizeActivityItems(activityData);
+      renderActivity(items);
     } catch {
-      // ignore
+      if (activityFeedEl) {
+        activityFeedEl.innerHTML = '';
+        const err = document.createElement('div');
+        err.className = 'insight-item-status';
+        err.textContent = 'Failed to load activity. Retry.';
+        const retry = document.createElement('button');
+        retry.className = 'btn';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', () => refreshInsights());
+        activityFeedEl.appendChild(err);
+        activityFeedEl.appendChild(retry);
+      }
     }
   } catch (err) {
     insightsJobsEl.textContent = `Failed to load insights: ${err.message}`;

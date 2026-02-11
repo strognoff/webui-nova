@@ -57,6 +57,38 @@ function normalizeTimestamp(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+function normalizeActivityEvent(raw, index = 0) {
+  const timestamp = normalizeTimestamp(raw?.timestamp ?? raw?.ts ?? Date.now()) || Date.now();
+  const type = typeof raw?.type === 'string' && raw.type.trim() ? raw.type.trim() : 'activity';
+  const title = typeof raw?.title === 'string' ? raw.title.trim() : '';
+  const detail = typeof raw?.detail === 'string' ? raw.detail.trim() : '';
+  const summary = [title, detail].filter(Boolean).join(' — ') || 'Update';
+  const id = String(raw?.id || `${timestamp}-${raw?.sha || index}`);
+  return {
+    id,
+    timestamp: new Date(timestamp).toISOString(),
+    type,
+    summary
+  };
+}
+
+function loadActivityFeed(limit = 5) {
+  const hardLimit = Math.min(Math.max(Number(limit) || 5, 1), 5);
+  const logPath = path.join(HOME_DIR, '.openclaw', 'workspace', 'activity-log.json');
+  try {
+    const raw = fs.readFileSync(logPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const updates = Array.isArray(parsed?.updates) ? parsed.updates : [];
+    const items = updates
+      .map((u, idx) => normalizeActivityEvent(u, idx))
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      .slice(0, hardLimit);
+    return { items };
+  } catch {
+    return { items: [] };
+  }
+}
+
 async function runSqliteJson(dbPath, query) {
   const result = [];
   try {
@@ -393,17 +425,14 @@ const server = http.createServer(async (req, res) => {
     }
 
 
-    if (req.method === 'GET' && url.pathname === '/api/activity') {
-      const logPath = path.join(HOME_DIR, '.openclaw', 'workspace', 'activity-log.json');
-      try {
-        const raw = fs.readFileSync(logPath, 'utf8');
-        const parsed = JSON.parse(raw);
-        const updates = Array.isArray(parsed?.updates) ? parsed.updates : [];
-        updates.sort((a, b) => (b.ts || 0) - (a.ts || 0));
-        return safeJson(res, 200, { ok: true, updates: updates.slice(0, 5) });
-      } catch (err) {
-        return safeJson(res, 200, { ok: true, updates: [] });
+    if (req.method === 'GET' && (url.pathname === '/api/activity-feed' || url.pathname === '/api/activity')) {
+      const limit = Number(url.searchParams.get('limit')) || 5;
+      const data = loadActivityFeed(limit);
+      // keep legacy shape for /api/activity callers
+      if (url.pathname === '/api/activity') {
+        return safeJson(res, 200, { ok: true, updates: data.items });
       }
+      return safeJson(res, 200, data);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/respond') {
