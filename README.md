@@ -85,6 +85,38 @@ This is safe **as long as your gateway remains loopback-only** (`gateway.bind: "
 5. Pick a session from the **Session** dropdown (usually `agent:main:main`).
 6. Chat.
 
+## Contributor handover (quick start)
+
+If you’re taking this project over, use this exact flow:
+
+1. Clone repo and install deps:
+   ```bash
+   git clone <repo-url> webui-nova
+   cd webui-nova
+   npm install
+   ```
+2. Confirm OpenClaw Gateway is up on `127.0.0.1:18789`.
+3. Ensure gateway config has `gateway.controlUi.allowInsecureAuth: true` for localhost HTTP UI.
+4. Run UI:
+   ```bash
+   npm start
+   ```
+5. Open `http://127.0.0.1:18881`, reconnect, select target session, validate send/receive.
+
+### Done criteria for changes
+
+- UI loads and reconnects with no console errors.
+- Session history loads correctly.
+- Send message works and response renders.
+- No accidental Telegram delivery from web UI (must remain `deliver: false`).
+- Add/update a short test report file in repo root for each meaningful change.
+
+### Common pitfalls
+
+- **WebSocket auth rejected:** check `allowInsecureAuth` and gateway bind mode.
+- **No session list:** verify gateway token/config path and that gateway is running.
+- **UI source confusion:** front-end files are under `public/` (`index.html`, `app.js`, `styles.css`), server is `server.mjs`.
+
 ## Files
 
 - `server.mjs`: tiny Node HTTP server
