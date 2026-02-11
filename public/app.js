@@ -520,7 +520,7 @@ function renderTokenChange(percent) {
   tokenChangePercentEl.className = `token-change ${percent >= 0 ? 'positive' : 'negative'}`;
 }
 
-function refreshInsights() {
+async function refreshInsights() {
   if (!insightsJobsEl) return;
   insightsJobsEl.textContent = 'Loading…';
   if (tokenUsageEl) tokenUsageEl.textContent = 'Loading…';
