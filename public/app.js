@@ -551,6 +551,8 @@ function renderTokenChange(percent) {
   tokenChangePercentEl.className = `token-change ${percent >= 0 ? 'positive' : 'negative'}`;
 }
 
+const debugForceActivityError = new URLSearchParams(window.location.search).get('activityError') === '1';
+
 async function refreshInsights() {
   if (!insightsJobsEl) return;
   insightsJobsEl.textContent = 'Loading…';
@@ -566,7 +568,10 @@ async function refreshInsights() {
 
     if (activityFeedEl) activityFeedEl.textContent = 'Loading recent activity…';
     try {
-      const activityResp = await fetch('/api/activity-feed?limit=5&ts=' + Date.now(), { cache: 'no-store' });
+      const activityUrl = debugForceActivityError
+        ? '/api/activity-feed-broken?limit=5&ts=' + Date.now()
+        : '/api/activity-feed?limit=5&ts=' + Date.now();
+      const activityResp = await fetch(activityUrl, { cache: 'no-store' });
       const activityData = await activityResp.json();
       const items = normalizeActivityItems(activityData);
       renderActivity(items);

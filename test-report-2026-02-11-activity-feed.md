@@ -25,6 +25,7 @@ Result:
 ## UI evidence
 - Success state screenshot: `demo/activity-feed-success.png`
 - Empty state screenshot: `demo/activity-feed-empty.png`
+- Error state screenshot: `demo/activity-feed-error.png` (captured via `?activityError=1` debug query)
 
 ## Notes
 - Canonical event contract:
