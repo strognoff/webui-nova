@@ -102,8 +102,8 @@ async function runSqliteJson(dbPath, query) {
 }
 
 const baseDir = path.dirname(new URL(import.meta.url).pathname);
-const DIST_DIR = path.join(baseDir, '..', 'nova-ui-react', 'dist');
-const ASSET_DIR = path.join(DIST_DIR, 'assets');
+// This project serves static assets from ./public.
+const DIST_DIR = path.join(baseDir, 'public');
 const TOKEN_HISTORY_PATH = path.join(HOME_DIR, '.openclaw', 'workspace', 'data', 'token_usage.json');
 
 function londonDateString() {
@@ -172,15 +172,13 @@ const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${WEB_PORT}`);
 
-    const distDir = path.join(baseDir, '..', 'nova-ui-react', 'dist');
-
     if (req.method === 'GET' && url.pathname === '/') {
-      return serveFile(res, path.join(distDir, 'index.html'), 'text/html; charset=utf-8');
+      return serveFile(res, path.join(DIST_DIR, 'index.html'), 'text/html; charset=utf-8');
     }
 
     if (req.method === 'GET') {
-      const candidate = path.join(distDir, url.pathname.replace(/^\//, ''));
-      if (candidate.startsWith(distDir) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      const candidate = path.join(DIST_DIR, url.pathname.replace(/^\//, ''));
+      if (candidate.startsWith(DIST_DIR) && fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
         const ext = path.extname(candidate);
         const type = ext === '.js'
           ? 'text/javascript; charset=utf-8'
