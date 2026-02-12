@@ -36,6 +36,7 @@ Validation facts from captured artifacts:
 - Success payload item count: 5
 - Empty payload item count: 0
 - Error endpoint HTTP status: 404
+- Integrity manifest: `demo/activity-feed-evidence.sha256`
 
 ## Notes
 - Canonical event contract:
