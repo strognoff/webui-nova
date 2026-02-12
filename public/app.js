@@ -315,9 +315,10 @@ async function refreshSessions() {
   // sessions.list shape: the Control UI uses sessions.list; response is { sessions: [...] }
   const resp = await request('sessions.list', { limit: 50, activeMinutes: 720 });
   const sessions = Array.isArray(resp?.sessions) ? resp.sessions : [];
+  const agentSessions = sessions.filter((s) => String(s?.key || '').startsWith('agent:'));
 
   sessionSelect.innerHTML = '';
-  for (const s of sessions) {
+  for (const s of agentSessions) {
     const key = (s?.key || '').trim();
     if (!key) continue;
     const kind = (s?.kind || '').trim();
@@ -330,9 +331,14 @@ async function refreshSessions() {
     sessionSelect.appendChild(opt);
   }
 
-  // keep selection if possible
-  if (selectedSessionKey) {
+  // keep selection if possible; otherwise fallback to first agent session
+  if (selectedSessionKey && agentSessions.some((s) => s?.key === selectedSessionKey)) {
     sessionSelect.value = selectedSessionKey;
+  } else if (agentSessions[0]?.key) {
+    await selectSession(agentSessions[0].key);
+    sessionSelect.value = agentSessions[0].key;
+  } else {
+    await selectSession('');
   }
 }
 
