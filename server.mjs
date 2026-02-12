@@ -106,8 +106,9 @@ const baseDir = path.dirname(new URL(import.meta.url).pathname);
 const DIST_DIR = path.join(baseDir, 'public');
 const TOKEN_HISTORY_PATH = path.join(HOME_DIR, '.openclaw', 'workspace', 'data', 'token_usage.json');
 
-function londonDateString() {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+function localDateString() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  return new Date().toLocaleDateString('en-CA', { timeZone: tz });
 }
 
 function loadTokenHistory() {
@@ -161,7 +162,7 @@ function updateTokenHistory(currentTotal, today) {
 }
 
 function loadOrUpdateTokenHistory(currentTotal) {
-  const today = londonDateString();
+  const today = localDateString();
   if (Number.isFinite(Number(currentTotal))) {
     return updateTokenHistory(currentTotal, today);
   }

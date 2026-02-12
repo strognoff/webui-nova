@@ -527,7 +527,7 @@ function renderTokenHistoryGraph(history) {
     column.appendChild(label);
     tokenGraphEl.appendChild(column);
   });
-  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 London dates).';
+  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 local dates).';
 }
 
 
