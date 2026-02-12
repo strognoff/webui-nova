@@ -27,6 +27,16 @@ Result:
 - Empty state screenshot: `demo/activity-feed-empty.png`
 - Error state screenshot: `demo/activity-feed-error.png`
 
+## API evidence artifacts
+- Success payload (seeded data, clamped to 5): `demo/activity-feed-api-success.json`
+- Empty payload: `demo/activity-feed-api-empty.json`
+- Error payload (404 path): `demo/activity-feed-api-error.json`
+
+Validation facts from captured artifacts:
+- Success payload item count: 5
+- Empty payload item count: 0
+- Error endpoint HTTP status: 404
+
 ## Notes
 - Canonical event contract:
   - `id` string
