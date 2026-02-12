@@ -31,6 +31,7 @@ let pending = new Map();
 let lastSeq = null;
 
 let isReplying = false;
+let reconnectInProgress = false;
 let mood = 'neutral';
 let selectedSessionKey = localStorage.getItem('nova_webui_sessionKey') || '';
 let lastRunId = null;
@@ -172,6 +173,7 @@ function onChatEvent(payload) {
     if (currentAssistantMsgEl && text) currentAssistantMsgEl.textContent = text;
     setMood(inferMood(text));
     isReplying = false;
+    sendBtn.disabled = false;
     setChatStatus('idle', true, false);
     lastRunId = null;
     currentAssistantMsgEl = null;
@@ -182,6 +184,7 @@ function onChatEvent(payload) {
 
   if (payload.state === 'error' || payload.state === 'aborted') {
     isReplying = false;
+    sendBtn.disabled = false;
     setChatStatus('idle', true, false);
     lastRunId = null;
     if (currentAssistantMsgEl) currentAssistantMsgEl.textContent = payload.errorMessage || 'Error.';
@@ -288,6 +291,8 @@ async function connect() {
 
     ws.addEventListener('close', (ev) => {
       connected = false;
+      isReplying = false;
+      sendBtn.disabled = false;
       setChatStatus('disconnected', false, true);
       const code = ev?.code;
       const reason = ev?.reason;
@@ -300,6 +305,8 @@ async function connect() {
 
     ws.addEventListener('error', (ev) => {
       connected = false;
+      isReplying = false;
+      sendBtn.disabled = false;
       setStatus('ws error (see console)', false, true);
       setChatStatus('disconnected', false, true);
       console.error('ws error', ev);
@@ -315,9 +322,10 @@ async function refreshSessions() {
   // sessions.list shape: the Control UI uses sessions.list; response is { sessions: [...] }
   const resp = await request('sessions.list', { limit: 50, activeMinutes: 720 });
   const sessions = Array.isArray(resp?.sessions) ? resp.sessions : [];
+  const agentSessions = sessions.filter((s) => String(s?.key || '').startsWith('agent:'));
 
   sessionSelect.innerHTML = '';
-  for (const s of sessions) {
+  for (const s of agentSessions) {
     const key = (s?.key || '').trim();
     if (!key) continue;
     const kind = (s?.kind || '').trim();
@@ -330,9 +338,14 @@ async function refreshSessions() {
     sessionSelect.appendChild(opt);
   }
 
-  // keep selection if possible
-  if (selectedSessionKey) {
+  // keep selection if possible; otherwise fallback to first agent session
+  if (selectedSessionKey && agentSessions.some((s) => s?.key === selectedSessionKey)) {
     sessionSelect.value = selectedSessionKey;
+  } else if (agentSessions[0]?.key) {
+    await selectSession(agentSessions[0].key);
+    sessionSelect.value = agentSessions[0].key;
+  } else {
+    await selectSession('');
   }
 }
 
@@ -376,8 +389,23 @@ async function selectSession(key) {
 
 async function send() {
   const msg = inputEl.value.trim();
-  if (!msg || isReplying || !connected || !selectedSessionKey) return;
+
+  if (!msg) {
+    setChatStatus('message required', false, true);
+    return;
+  }
+  if (isReplying) return;
+  if (!connected) {
+    setChatStatus('disconnected', false, true);
+    return;
+  }
+  if (!selectedSessionKey) {
+    setChatStatus('pick a session', false, true);
+    return;
+  }
+
   inputEl.value = '';
+  sendBtn.disabled = true;
 
   addMsg('user', msg);
   currentAssistantMsgEl = addMsg('assistant', '…');
@@ -406,6 +434,7 @@ async function send() {
     setChatStatus('error', false, true);
     setMood('serious');
     setMood(mood);
+    sendBtn.disabled = false;
   }
 }
 
@@ -498,7 +527,7 @@ function renderTokenHistoryGraph(history) {
     column.appendChild(label);
     tokenGraphEl.appendChild(column);
   });
-  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 London dates).';
+  if (tokenGraphLabel) tokenGraphLabel.textContent = 'Daily token total (last 5 local dates).';
 }
 
 
@@ -635,11 +664,21 @@ function tick(t) {
 // events
 sendBtn.addEventListener('click', send);
 reconnectBtn.addEventListener('click', async () => {
+  if (reconnectInProgress) return;
+  reconnectInProgress = true;
+  reconnectBtn.disabled = true;
+  reconnectBtn.textContent = 'Reconnecting…';
+  setStatus('reconnecting…');
+
   try {
     await fetch('/api/reconnect', { method: 'POST' });
-  } catch {}
-  await connect();
-  await updateConnectionBadge();
+    await connect();
+    await updateConnectionBadge();
+  } finally {
+    reconnectInProgress = false;
+    reconnectBtn.disabled = false;
+    reconnectBtn.textContent = 'Reconnect';
+  }
 });
 clearBtn.addEventListener('click', () => {
   chatEl.innerHTML = '';
