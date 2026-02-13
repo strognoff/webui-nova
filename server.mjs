@@ -72,21 +72,105 @@ function normalizeActivityEvent(raw, index = 0) {
   };
 }
 
+function loadRecentCronSessionActivity(limit = 5) {
+  const hardLimit = Math.min(Math.max(Number(limit) || 5, 1), 20);
+  const sessionsDir = path.join(HOME_DIR, '.openclaw', 'agents', 'main', 'sessions');
+  try {
+    const files = fs.readdirSync(sessionsDir)
+      .filter(f => f.endsWith('.jsonl'))
+      .map(f => {
+        const full = path.join(sessionsDir, f);
+        const st = fs.statSync(full);
+        return { full, mtimeMs: st.mtimeMs };
+      })
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+
+    const out = [];
+    for (const f of files) {
+      if (out.length >= hardLimit) break;
+      // Read only the last chunk to keep this cheap.
+      const buf = fs.readFileSync(f.full, 'utf8');
+      const lines = buf.trim().split('\n');
+      const tail = lines.slice(Math.max(0, lines.length - 200));
+
+      let isCron = false;
+      let ts = null;
+      let assistantText = '';
+
+      for (const line of tail) {
+        let row;
+        try { row = JSON.parse(line); } catch { continue; }
+        if (!ts && typeof row?.timestamp === 'string') ts = row.timestamp;
+        const msg = row?.message;
+        if (row?.type === 'message' && msg?.role === 'user') {
+          const text = Array.isArray(msg?.content)
+            ? msg.content.map(c => c?.text).filter(Boolean).join('')
+            : '';
+          if (text.includes('[cron:')) isCron = true;
+        }
+        if (row?.type === 'message' && msg?.role === 'assistant') {
+          const parts = Array.isArray(msg?.content) ? msg.content : [];
+          const texts = parts
+            .filter(p => p?.type === 'text' && typeof p?.text === 'string')
+            .map(p => p.text.trim())
+            .filter(Boolean);
+          if (texts.length) assistantText = texts.join('\n').trim();
+        }
+      }
+
+      if (!isCron) continue;
+      const whenMs = ts ? Date.parse(ts) : f.mtimeMs;
+      if (!assistantText) continue;
+      const firstLine = assistantText.split('\n').find(Boolean) || '';
+      const summary = firstLine.slice(0, 140) || 'Cron update';
+      if (!summary || summary.trim() === 'NO_REPLY') continue;
+      out.push({
+        id: `cron-${path.basename(f.full, '.jsonl')}`,
+        timestamp: new Date(whenMs).toISOString(),
+        type: 'cron',
+        summary
+      });
+    }
+
+    return out.slice(0, Math.min(5, Number(limit) || 5));
+  } catch {
+    return [];
+  }
+}
+
 function loadActivityFeed(limit = 5) {
   const hardLimit = Math.min(Math.max(Number(limit) || 5, 1), 5);
   const logPath = path.join(HOME_DIR, '.openclaw', 'workspace', 'activity-log.json');
+
+  let items = [];
   try {
     const raw = fs.readFileSync(logPath, 'utf8');
     const parsed = JSON.parse(raw);
     const updates = Array.isArray(parsed?.updates) ? parsed.updates : [];
-    const items = updates
-      .map((u, idx) => normalizeActivityEvent(u, idx))
-      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, hardLimit);
-    return { items };
+    items = updates.map((u, idx) => normalizeActivityEvent(u, idx));
   } catch {
-    return { items: [] };
+    items = [];
   }
+
+  // If the activity log is missing/stale, fall back to recent cron session outputs.
+  const newest = items.length ? Math.max(...items.map(i => Date.parse(i.timestamp))) : 0;
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const isStale = !newest || (Date.now() - newest) > oneDayMs;
+  if (isStale) {
+    items = items.concat(loadRecentCronSessionActivity(hardLimit));
+  }
+
+  const dedup = new Map();
+  for (const it of items) {
+    const key = `${it.timestamp}-${it.summary}`;
+    if (!dedup.has(key)) dedup.set(key, it);
+  }
+
+  return {
+    items: Array.from(dedup.values())
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      .slice(0, hardLimit)
+  };
 }
 
 async function runSqliteJson(dbPath, query) {
